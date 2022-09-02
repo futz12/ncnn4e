@@ -12,6 +12,12 @@ struct _ocr
     ncnn::Net crnnNet;
 
     std::vector<std::string> keys;
+
+    std::vector<unsigned char> dbNet_param;
+    std::vector<unsigned char> crnnNet_param;
+
+    std::vector<unsigned char> dbNet_bin;
+    std::vector<unsigned char> crnnNet_bin;
 };
 
 typedef _ocr *__ocr;
@@ -434,15 +440,31 @@ char *readKeys(const char *keyfile)
     return ar;
 }
 
-extern "C" __ocr __declspec(dllexport) __stdcall ocr_InitPaddleOcr(const char *dbNet_param, const char *crnnNet_param, const char *dbNet_bin, const char *crnnNet_bin, const char *keylist, const int dstHeight, const bool use_vulkan)
+extern "C" __ocr __declspec(dllexport) __stdcall ocr_InitPaddleOcr(const unsigned char *mem_dbNet_param, const int size_dbNet_param, const unsigned char *mem_crnnNet_param, const int size_crnnNet_param, const unsigned char *mem_dbNet_bin, const int size_dbNet_bin, const unsigned char *mem_crnnNet_bin, const int size_crnnNet_bin, const char *mem_keylist, const int dstHeight, const bool use_vulkan)
 {
+    if (use_vulkan && ncnn::get_gpu_count() == 0)
+    {
+        // no gpu
+        std::cout << "[OCR]Err Your GPU count is Zero" << std::endl;
+        return NULL;
+    }
+
     __ocr ocr = new _ocr;
+
+    ocr->dbNet_param.insert(ocr->dbNet_param.end(), mem_dbNet_param, mem_dbNet_param + size_dbNet_param);
+    ocr->dbNet_bin.insert(ocr->dbNet_bin.end(), mem_dbNet_bin, mem_dbNet_bin + size_dbNet_bin);
+
+    ocr->crnnNet_param.insert(ocr->crnnNet_param.end(), mem_crnnNet_param, mem_crnnNet_param + size_crnnNet_param);
+    ocr->crnnNet_bin.insert(ocr->crnnNet_bin.end(), mem_crnnNet_bin, mem_crnnNet_bin + size_crnnNet_bin);
+
+    ocr->dbNet_param.push_back(0);
+    ocr->crnnNet_param.push_back(0);
 
     ocr->dstHeight = dstHeight;
 
     ncnn::Option opt;
     opt.lightmode = true;
-    opt.num_threads = 4;
+    opt.num_threads = ncnn::get_big_cpu_count();
     opt.blob_allocator = &ocr->g_blob_pool_allocator;
     opt.workspace_allocator = &ocr->g_workspace_pool_allocator;
     opt.use_packing_layout = true;
@@ -454,7 +476,7 @@ extern "C" __ocr __declspec(dllexport) __stdcall ocr_InitPaddleOcr(const char *d
 
     // init param
     {
-        int ret = ocr->dbNet.load_param(dbNet_param);
+        int ret = ocr->dbNet.load_param_mem((char *)ocr->dbNet_param.data());
         if (ret != 0)
         {
             std::cout << "[OCR]Err Read dbNet_param Failed" << std::endl;
@@ -462,7 +484,7 @@ extern "C" __ocr __declspec(dllexport) __stdcall ocr_InitPaddleOcr(const char *d
             return NULL;
         }
 
-        ret = ocr->crnnNet.load_param(crnnNet_param);
+        ret = ocr->crnnNet.load_param_mem((char *)ocr->crnnNet_param.data());
 
         if (ret != 0)
         {
@@ -474,17 +496,17 @@ extern "C" __ocr __declspec(dllexport) __stdcall ocr_InitPaddleOcr(const char *d
 
     // init bin
     {
-        int ret = ocr->dbNet.load_model(dbNet_bin);
-        if (ret != 0)
+        int ret = ocr->dbNet.load_model(ocr->dbNet_bin.data());
+        if (ret == 0)
         {
             std::cout << "[OCR]Err Read dbNet_bin Failed" << std::endl;
             delete ocr;
             return NULL;
         }
 
-        ret = ocr->crnnNet.load_model(crnnNet_bin);
+        ret = ocr->crnnNet.load_model(ocr->crnnNet_bin.data());
 
-        if (ret != 0)
+        if (ret == 0)
         {
             std::cout << "[OCR]Err Read crnnNet_bin Failed" << std::endl;
             delete ocr;
@@ -493,24 +515,16 @@ extern "C" __ocr __declspec(dllexport) __stdcall ocr_InitPaddleOcr(const char *d
     }
 
     // load keys
-    char *buffer = readKeys(keylist);
-    if (buffer != NULL)
+
+    std::istringstream inStr(mem_keylist);
+    std::string line;
+    int size = 0;
+    while (getline(inStr, line))
     {
-        std::istringstream inStr(buffer);
-        std::string line;
-        int size = 0;
-        while (getline(inStr, line))
-        {
-            ocr->keys.emplace_back(line);
-            size++;
-        }
-        free(buffer);
+        ocr->keys.emplace_back(line);
+        size++;
     }
-    else
-    {
-        delete ocr;
-        return NULL;
-    }
+
     return ocr;
 }
 
@@ -521,7 +535,7 @@ struct Object
     char *Text;
 };
 
-extern "C" int __declspec(dllexport) __stdcall ocr_Deal(__ocr ocr, unsigned char *img_src, int img_size, Object *ret) // ret要开大来
+extern "C" int __declspec(dllexport) __stdcall ocr_Deal(__ocr ocr, unsigned char *img_src, const int img_size, Object **ResList)
 {
     cv::_InputArray pic_arr(img_src, img_size);
     cv::Mat src_mat = cv::imdecode(pic_arr, cv::IMREAD_UNCHANGED);
@@ -543,24 +557,41 @@ extern "C" int __declspec(dllexport) __stdcall ocr_Deal(__ocr ocr, unsigned char
             objects[i].text = textLines[i].text;
     }
     int count = objects.size();
+    if (count == 0)
+        return 0;
+
+    *ResList = new Object[count];
+
     for (int i = 0; i < count; i++)
     {
-        ret[i].box.x = objects[i].boxPoint[0].x;
-        ret[i].box.y = objects[i].boxPoint[0].y;
+        (*ResList)[i].box.x = objects[i].boxPoint[0].x;
+        (*ResList)[i].box.y = objects[i].boxPoint[0].y;
 
-        ret[i].box.width = objects[i].boxPoint[2].x - objects[i].boxPoint[0].x;
-        ret[i].box.height = objects[i].boxPoint[2].y - objects[i].boxPoint[0].y;
+        (*ResList)[i].box.width = objects[i].boxPoint[2].x - objects[i].boxPoint[0].x;
+        (*ResList)[i].box.height = objects[i].boxPoint[2].y - objects[i].boxPoint[0].y;
 
-        memcpy(ret[i].Text, objects[i].text.c_str(), objects[i].text.size());
-        ret[i].Text[objects[i].text.size()] = '\0';
+        (*ResList)[i].Text = new char[objects[i].text.size() + 1];
 
-        ret[i].score = objects[i].score;
+        memcpy((*ResList)[i].Text, objects[i].text.c_str(), objects[i].text.size());
+        (*ResList)[i].Text[objects[i].text.size()] = '\0';
+
+        (*ResList)[i].score = objects[i].score;
     }
     return count;
 }
 
+extern "C" void __declspec(dllexport) __stdcall ocr_DestructRet(Object *ResList)
+{
+    int count = _msize(ResList) / sizeof(Object);
+    for (int i = 0; i < count; i++)
+        delete[] ResList[i].Text;
+    delete[] ResList;
+}
+
 extern "C" void __declspec(dllexport) __stdcall ocr_Destroy(__ocr ocr)
 {
+    ocr->crnnNet.clear();
+    ocr->dbNet.clear();
     delete ocr;
 }
 

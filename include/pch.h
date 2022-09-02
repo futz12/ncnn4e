@@ -17,6 +17,10 @@
 #include <algorithm>
 
 #include "clipper.hpp"
+#include "nanodet.h"
+
+#include <ncnn/cpu.h>
 
 #define YOLOV7
 #define OCR
+#define POSE

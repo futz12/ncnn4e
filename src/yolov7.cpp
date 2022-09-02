@@ -184,21 +184,38 @@ static void nms_sorted_bboxes(const std::vector<Object> &faceobjects, std::vecto
     }
 }
 
-extern "C" __declspec(dllexport) __yolov7 __stdcall yolov7_Init(const char *paramfile, const char *modelfile, float nms_threshold, int target_size, char *layer0, char *layer1, char *layer2, const bool use_vulkan)
+extern "C" __declspec(dllexport) __yolov7 __stdcall yolov7_Init(const unsigned char *mem_param, int size_param, const unsigned char *mem_model, int size_model, float nms_threshold, int target_size, const char *layer0, const char *layer1, const char *layer2, const bool use_vulkan)
 {
+    if (use_vulkan && ncnn::get_gpu_count() == 0)
+    {
+        // no gpu
+        std::cout << "[Yolov7]Err Your GPU count is Zero" << std::endl;
+        return NULL;
+    }
+
     _yolov7 *yolov7Net = new _yolov7;
 
     yolov7Net->net.opt.use_vulkan_compute = use_vulkan;
+    yolov7Net->net.opt.num_threads = ncnn::get_big_cpu_count();
 
-    if (yolov7Net->net.load_param(paramfile) != 0)
+    yolov7Net->param.clear();
+    yolov7Net->model.clear();
+
+    yolov7Net->param.insert(yolov7Net->param.end(), mem_param, mem_param + size_param);
+    yolov7Net->model.insert(yolov7Net->model.end(), mem_model, mem_model + size_model);
+
+    yolov7Net->param.push_back(0);
+
+    if (yolov7Net->net.load_param_mem((char *)yolov7Net->param.data()) != 0)
     {
         std::cout << "[Yolov7]Err Read Param Failed" << endl;
         delete yolov7Net;
         return NULL;
     }
-    if (yolov7Net->net.load_model(modelfile) != 0)
+    if (yolov7Net->net.load_model(yolov7Net->model.data()) == 0)
     {
         std::cout << "[Yolov7]Err Read Model Failed" << endl;
+        delete yolov7Net;
         return NULL;
     }
     yolov7Net->nms_threshold = nms_threshold;
@@ -368,6 +385,8 @@ extern "C" int __declspec(dllexport) __stdcall yolov7_Deal(__yolov7 yolov7, cons
         objects[i].rect.width = x1 - x0;
         objects[i].rect.height = y1 - y0;
     }
+    if (count == 0)
+        return 0;
 
     *ResList = new Object[count];
     // std::cout << "[DEBUG] " << proposals.size() * sizeof(Object) <<' '<<_msize(*ResList) << std::endl;
@@ -375,8 +394,14 @@ extern "C" int __declspec(dllexport) __stdcall yolov7_Deal(__yolov7 yolov7, cons
     return objects.size();
 }
 
+extern "C" void __declspec(dllexport) __stdcall yolov7_DestructRet(Object *ResList)
+{
+    delete[] ResList;
+}
+
 extern "C" void __declspec(dllexport) __stdcall yolov7_Destroy(__yolov7 yolov7)
 {
+    yolov7->net.clear();
     delete yolov7;
 }
 
