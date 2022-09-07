@@ -64,6 +64,12 @@ extern "C" int __declspec(dllexport) __stdcall pose_Deal(__pose pose, const unsi
     cv::_InputArray pic_arr(img_src, img_size);
     cv::Mat rgb = cv::imdecode(pic_arr, cv::IMREAD_UNCHANGED);
 
+    if (rgb.empty())
+    {
+        std::cout << "[POSE]ERR Cant Read Img" << std::endl;
+        return 0;
+    }
+
     std::vector<Person> objects;
     pose->g_nanodet.detect(rgb, objects);
 

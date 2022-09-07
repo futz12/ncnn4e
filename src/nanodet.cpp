@@ -12,6 +12,8 @@
 // CONDITIONS OF ANY KIND, either express or implied. See the License for the
 // specific language governing permissions and limitations under the License.
 
+#include "pch.h"
+#ifdef POSE
 #include "nanodet.h"
 
 #include <opencv2/core/core.hpp>
@@ -763,3 +765,4 @@ int NanoDet::draw(cv::Mat &rgb, std::vector<Person> &objects) //此函数已被�
 
     return 0;
 }
+#endif

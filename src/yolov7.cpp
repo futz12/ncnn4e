@@ -4,8 +4,6 @@
 
 #define MAX_STRIDE 32
 
-using namespace std;
-
 static inline float sigmoid(float x)
 {
     return static_cast<float>(1.f / (1.f + exp(-x)));
@@ -208,13 +206,13 @@ extern "C" __declspec(dllexport) __yolov7 __stdcall yolov7_Init(const unsigned c
 
     if (yolov7Net->net.load_param_mem((char *)yolov7Net->param.data()) != 0)
     {
-        std::cout << "[Yolov7]Err Read Param Failed" << endl;
+        std::cout << "[Yolov7]Err Read Param Failed" << std::endl;
         delete yolov7Net;
         return NULL;
     }
     if (yolov7Net->net.load_model(yolov7Net->model.data()) == 0)
     {
-        std::cout << "[Yolov7]Err Read Model Failed" << endl;
+        std::cout << "[Yolov7]Err Read Model Failed" << std::endl;
         delete yolov7Net;
         return NULL;
     }

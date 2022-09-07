@@ -420,26 +420,6 @@ std::vector<cv::Mat> getPartImages(const cv::Mat &src, std::vector<TextBox> &tex
     return partImages;
 }
 
-char *readKeys(const char *keyfile)
-{
-    FILE *fp;
-    fp = fopen(keyfile, "rt");
-    if (fp == NULL)
-    {
-        std::cout << "[OCR]Err Read Keys Failed" << std::endl;
-        return NULL;
-    }
-    fseek(fp, 0, SEEK_END);
-    int size = ftell(fp);
-    rewind(fp);
-
-    char *ar = (char *)malloc(sizeof(char) * size);
-    fread(ar, 1, size, fp);
-
-    fclose(fp);
-    return ar;
-}
-
 extern "C" __ocr __declspec(dllexport) __stdcall ocr_InitPaddleOcr(const unsigned char *mem_dbNet_param, const int size_dbNet_param, const unsigned char *mem_crnnNet_param, const int size_crnnNet_param, const unsigned char *mem_dbNet_bin, const int size_dbNet_bin, const unsigned char *mem_crnnNet_bin, const int size_crnnNet_bin, const char *mem_keylist, const int dstHeight, const bool use_vulkan)
 {
     if (use_vulkan && ncnn::get_gpu_count() == 0)
@@ -539,6 +519,12 @@ extern "C" int __declspec(dllexport) __stdcall ocr_Deal(__ocr ocr, unsigned char
 {
     cv::_InputArray pic_arr(img_src, img_size);
     cv::Mat src_mat = cv::imdecode(pic_arr, cv::IMREAD_UNCHANGED);
+
+    if (src_mat.empty())
+    {
+        std::cout << "[OCR]ERR Cant Read Img" << std::endl;
+        return 0;
+    }
 
     ncnn::Mat in = ncnn::Mat::from_pixels(src_mat.data, ncnn::Mat::PIXEL_BGR2RGB, src_mat.cols, src_mat.rows);
 
