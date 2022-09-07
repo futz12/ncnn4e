@@ -1,11 +1,44 @@
 # ncnn4e
 关于NCNN常见模型便于C的封装
 
-当前最新版本~1.0a~
+当前最新版本~1.1a~
 
 交流Q群：904511841
 
 == 当前还不是正式版本 ==
+# V1.1a更新日志
+## 功能
+1. 百度飞桨Ocr
+2. Yolov7
+3. MoveNet(多对象肢体识别)
+4. 人脸检测
+5. 人脸特征提取与识别
+
+##注意
+项目使用以下项目的二进制文件或是源码，由于各部分开源协议不一致，请谨慎使用
+
+1. https://github.com/nihui/ncnn
+2. https://github.com/FeiGeChuanShu/ncnn_paddleocr
+3. https://github.com/DayBreak-u/chineseocr_lite/tree/onnx/cpp_projects/OcrLiteNcnn
+4. https://github.com/frotms/PaddleOCR2Pytorch
+5. https://github.com/PaddlePaddle/PaddleOCR#PP-OCRv2
+6. https://github.com/PaddlePaddle/PaddleOCR/blob/release/2.5
+7. https://github.com/WongKinYiu/yolov7
+8. https://github.com/FeiGeChuanShu/ncnn_Android_MoveNet
+9. https://github.com/nihui/ncnn-android-nanodet
+10. Google MoveNet
+11. https://github.com/FeiGeChuanShu/ncnn_Android_blazeface
+12. https://github.com/WegenPan/faceRecognition-jna
+
+## 已知BUG
+~不详~
+~UP没有往头文件写东西~
+
+## To Do
+1. 易语言采用wow64方法调用64bit的dll，以便支持更大的内存
+2. 修复现有bug
+3. 语义识别
+
 # V1.0a更新日志
 ## 功能
 1. 百度飞桨Ocr
