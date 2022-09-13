@@ -4,6 +4,7 @@
 当前最新版本~1.1a~
 
 交流Q群：904511841
+点击链接加入群聊【ZMPI Development Insider】：https://jq.qq.com/?_wv=1027&k=17AMp3X1
 
 == 当前还不是正式版本 ==
 # V1.1a更新日志
