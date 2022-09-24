@@ -1,7 +1,7 @@
 # ncnn4e
 关于NCNN常见模型便于C的封装
 
-当前最新版本~1.2.0b~
+当前最新版本~1.2.1b~
 
 交流Q群：904511841
 点击链接加入群聊【ZMPI Development Insider】：https://jq.qq.com/?_wv=1027&k=17AMp3X1
