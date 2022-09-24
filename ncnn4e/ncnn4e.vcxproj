@@ -253,6 +253,7 @@
     </ClCompile>
     <ClCompile Include="pose.cpp" />
     <ClCompile Include="yolov4.cpp" />
+    <ClCompile Include="yolov5.cpp" />
     <ClCompile Include="yolov7.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

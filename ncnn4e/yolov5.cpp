@@ -1,33 +1,98 @@
 #include "pch.h"
-#ifdef YOLOV7
-#include "yolov7.h"
+#ifdef YOLOV5
 
-#define MAX_STRIDE 32
+struct Object
+{
+    cv::Rect_<float> rect;
+    int label;
+    float prob;
+};
 
-static inline float intersection_area(const Object &a, const Object &b)
+struct _yolov5
+{
+    ncnn::Net net;
+
+    std::string layerName[4];
+
+    std::vector<unsigned char> param;
+    std::vector<unsigned char> model;
+
+    int MAX_STRIDE;
+
+};
+
+typedef _yolov5* __yolov5;
+
+class YoloV5Focus : public ncnn::Layer
+{
+public:
+    YoloV5Focus()
+    {
+        one_blob_only = true;
+    }
+
+    virtual int forward(const ncnn::Mat& bottom_blob, ncnn::Mat& top_blob, const ncnn::Option& opt) const
+    {
+        int w = bottom_blob.w;
+        int h = bottom_blob.h;
+        int channels = bottom_blob.c;
+
+        int outw = w / 2;
+        int outh = h / 2;
+        int outc = channels * 4;
+
+        top_blob.create(outw, outh, outc, 4u, 1, opt.blob_allocator);
+        if (top_blob.empty())
+            return -100;
+
+#pragma omp parallel for num_threads(opt.num_threads)
+        for (int p = 0; p < outc; p++)
+        {
+            const float* ptr = bottom_blob.channel(p % channels).row((p / channels) % 2) + ((p / channels) / 2);
+            float* outptr = top_blob.channel(p);
+
+            for (int i = 0; i < outh; i++)
+            {
+                for (int j = 0; j < outw; j++)
+                {
+                    *outptr = *ptr;
+
+                    outptr += 1;
+                    ptr += 2;
+                }
+
+                ptr += w;
+            }
+        }
+
+        return 0;
+    }
+};
+
+static inline float intersection_area(const Object& a, const Object& b)
 {
     cv::Rect_<float> inter = a.rect & b.rect;
     return inter.area();
 }
 
-static void qsort_descent_inplace(std::vector<Object> &objects, int left, int right)
+static void qsort_descent_inplace(std::vector<Object>& faceobjects, int left, int right)
 {
     int i = left;
     int j = right;
-    float p = objects[(left + right) / 2].prob;
+    float p = faceobjects[(left + right) / 2].prob;
 
     while (i <= j)
     {
-        while (objects[i].prob > p)
+        while (faceobjects[i].prob > p)
             i++;
 
-        while (objects[j].prob < p)
+        while (faceobjects[j].prob < p)
             j--;
 
         if (i <= j)
         {
             // swap
-            std::swap(objects[i], objects[j]);
+            std::swap(faceobjects[i], faceobjects[j]);
 
             i++;
             j--;
@@ -38,26 +103,24 @@ static void qsort_descent_inplace(std::vector<Object> &objects, int left, int ri
     {
 #pragma omp section
         {
-            if (left < j)
-                qsort_descent_inplace(objects, left, j);
+            if (left < j) qsort_descent_inplace(faceobjects, left, j);
         }
 #pragma omp section
         {
-            if (i < right)
-                qsort_descent_inplace(objects, i, right);
+            if (i < right) qsort_descent_inplace(faceobjects, i, right);
         }
     }
 }
 
-static void qsort_descent_inplace(std::vector<Object> &objects)
+static void qsort_descent_inplace(std::vector<Object>& faceobjects)
 {
-    if (objects.empty())
+    if (faceobjects.empty())
         return;
 
-    qsort_descent_inplace(objects, 0, objects.size() - 1);
+    qsort_descent_inplace(faceobjects, 0, faceobjects.size() - 1);
 }
 
-static void nms_sorted_bboxes(const std::vector<Object> &faceobjects, std::vector<int> &picked, float nms_threshold, bool agnostic = false)
+static void nms_sorted_bboxes(const std::vector<Object>& faceobjects, std::vector<int>& picked, float nms_threshold, bool agnostic = false)
 {
     picked.clear();
 
@@ -71,12 +134,12 @@ static void nms_sorted_bboxes(const std::vector<Object> &faceobjects, std::vecto
 
     for (int i = 0; i < n; i++)
     {
-        const Object &a = faceobjects[i];
+        const Object& a = faceobjects[i];
 
         int keep = 1;
         for (int j = 0; j < (int)picked.size(); j++)
         {
-            const Object &b = faceobjects[picked[j]];
+            const Object& b = faceobjects[picked[j]];
 
             if (!agnostic && a.label != b.label)
                 continue;
@@ -99,7 +162,7 @@ static inline float sigmoid(float x)
     return static_cast<float>(1.f / (1.f + exp(-x)));
 }
 
-static void generate_proposals(const ncnn::Mat &anchors, int stride, const ncnn::Mat &in_pad, const ncnn::Mat &feat_blob, float prob_threshold, std::vector<Object> &objects)
+static void generate_proposals(const ncnn::Mat& anchors, int stride, const ncnn::Mat& in_pad, const ncnn::Mat& feat_blob, float prob_threshold, std::vector<Object>& objects)
 {
     const int num_grid = feat_blob.h;
 
@@ -131,7 +194,7 @@ static void generate_proposals(const ncnn::Mat &anchors, int stride, const ncnn:
         {
             for (int j = 0; j < num_grid_x; j++)
             {
-                const float *featptr = feat.row(i * num_grid_x + j);
+                const float* featptr = feat.row(i * num_grid_x + j);
                 float box_confidence = sigmoid(featptr[4]);
                 if (box_confidence >= prob_threshold)
                 {
@@ -150,6 +213,11 @@ static void generate_proposals(const ncnn::Mat &anchors, int stride, const ncnn:
                     float confidence = box_confidence * sigmoid(class_score);
                     if (confidence >= prob_threshold)
                     {
+                        // yolov5/models/yolo.py Detect forward
+                        // y = x[i].sigmoid()
+                        // y[..., 0:2] = (y[..., 0:2] * 2. - 0.5 + self.grid[i].to(x[i].device)) * self.stride[i]  # xy
+                        // y[..., 2:4] = (y[..., 2:4] * 2) ** 2 * self.anchor_grid[i]  # wh
+
                         float dx = sigmoid(featptr[0]);
                         float dy = sigmoid(featptr[1]);
                         float dw = sigmoid(featptr[2]);
@@ -182,52 +250,60 @@ static void generate_proposals(const ncnn::Mat &anchors, int stride, const ncnn:
     }
 }
 
-extern "C" __declspec(dllexport) __yolov7 __stdcall yolov7_Init(const unsigned char *mem_param, const int size_param, const unsigned char *mem_model, const int size_model, const char *inputlayer, const char *outputlayer0, const char *outputlayer1, const char *outputlayer2, const bool use_vulkan)
+DEFINE_LAYER_CREATOR(YoloV5Focus)
+
+extern "C" __declspec(dllexport) __yolov5 __stdcall yolov5_Init(const unsigned char* mem_param,const int size_param, const unsigned char* mem_model, const int size_model, const bool version_6,const char* inputlayer, const char* outputlayer0, const char* outputlayer1, const char* outputlayer2, const bool use_vulkan)
 {
     if (use_vulkan && ncnn::get_gpu_count() == 0)
     {
         // no gpu
-        std::cout << "[Yolov7]Err Your GPU count is Zero" << std::endl;
+        std::cout << "[Yolov5]Err Your GPU count is Zero" << std::endl;
         return NULL;
     }
 
-    _yolov7 *yolov7Net = new _yolov7;
+    _yolov5* yolov5Net = new _yolov5;
 
-    yolov7Net->net.opt.use_vulkan_compute = use_vulkan;
-    yolov7Net->net.opt.num_threads = ncnn::get_big_cpu_count();
+    yolov5Net->net.opt.use_vulkan_compute = use_vulkan;
+    yolov5Net->net.opt.num_threads = ncnn::get_big_cpu_count();
 
-    yolov7Net->param.clear();
-    yolov7Net->model.clear();
+    yolov5Net->param.clear();
+    yolov5Net->model.clear();
 
-    yolov7Net->param.insert(yolov7Net->param.end(), mem_param, mem_param + size_param);
-    yolov7Net->model.insert(yolov7Net->model.end(), mem_model, mem_model + size_model);
+    yolov5Net->param.insert(yolov5Net->param.end(), mem_param, mem_param + size_param);
+    yolov5Net->model.insert(yolov5Net->model.end(), mem_model, mem_model + size_model);
 
-    yolov7Net->param.push_back(0);
+    yolov5Net->param.push_back(0);
 
-    if (yolov7Net->net.load_param_mem((char *)yolov7Net->param.data()) != 0)
+    if (version_6)
+        yolov5Net->MAX_STRIDE = 64;
+    else
+        yolov5Net->MAX_STRIDE = 32, yolov5Net->net.register_custom_layer("YoloV5Focus", YoloV5Focus_layer_creator);
+
+    if (yolov5Net->net.load_param_mem((char*)yolov5Net->param.data()) != 0)
     {
-        std::cout << "[Yolov7]Err Read Param Failed" << std::endl;
-        delete yolov7Net;
+        std::cout << "[Yolov5]Err Read Param Failed" << std::endl;
+        delete yolov5Net;
         return NULL;
     }
-    if (yolov7Net->net.load_model(yolov7Net->model.data()) == 0)
+    if (yolov5Net->net.load_model(yolov5Net->model.data()) == 0)
     {
-        std::cout << "[Yolov7]Err Read Model Failed" << std::endl;
-        delete yolov7Net;
+        std::cout << "[Yolov5]Err Read Model Failed" << std::endl;
+        delete yolov5Net;
         return NULL;
     }
-    yolov7Net->layerName[0] = inputlayer;
-    yolov7Net->layerName[1] = outputlayer0;
-    yolov7Net->layerName[2] = outputlayer1;
-    yolov7Net->layerName[3] = outputlayer2;
-    return yolov7Net;
+    yolov5Net->layerName[0] = inputlayer;
+    yolov5Net->layerName[1] = outputlayer0;
+    yolov5Net->layerName[2] = outputlayer1;
+    yolov5Net->layerName[3] = outputlayer2;
+
+    return yolov5Net;
 }
 
-extern "C" int __declspec(dllexport) __stdcall yolov7_Deal(__yolov7 yolov7, const unsigned char *img_src, const int img_size, const int target_size, const float prob_threshold, const float nms_threshold, Object **ResList)
+extern "C" int __declspec(dllexport) __stdcall yolov5_Deal(__yolov5 yolov5, const unsigned char* img_src, const int img_size, const int target_size, const float prob_threshold, const float nms_threshold, Object * *ResList)
 {
-    if (yolov7 == NULL)
+    if (yolov5 == NULL)
     {
-        std::cout << "[Yolov7]Not Init" << std::endl;
+        std::cout << "[Yolov5]Not Init" << std::endl;
         return 0;
     }
 
@@ -236,7 +312,7 @@ extern "C" int __declspec(dllexport) __stdcall yolov7_Deal(__yolov7 yolov7, cons
 
     if (src_mat.empty())
     {
-        std::cout << "[Yolov7]ERR Cant Read Img" << std::endl;
+        std::cout << "[Yolov5]ERR Cant Read Img" << std::endl;
         return 0;
     }
 
@@ -274,32 +350,32 @@ extern "C" int __declspec(dllexport) __stdcall yolov7_Deal(__yolov7 yolov7, cons
 
     ncnn::Mat in = ncnn::Mat::from_pixels_resize(src_mat.data, ncnn::Mat::PIXEL_BGR2RGB, img_w, img_h, w, h);
 
-    int wpad = (w + MAX_STRIDE - 1) / MAX_STRIDE * MAX_STRIDE - w;
-    int hpad = (h + MAX_STRIDE - 1) / MAX_STRIDE * MAX_STRIDE - h;
+    int wpad = (w + yolov5->MAX_STRIDE - 1) / yolov5->MAX_STRIDE * yolov5->MAX_STRIDE - w;
+    int hpad = (h + yolov5->MAX_STRIDE - 1) / yolov5->MAX_STRIDE * yolov5->MAX_STRIDE - h;
     ncnn::Mat in_pad;
     ncnn::copy_make_border(in, in_pad, hpad / 2, hpad - hpad / 2, wpad / 2, wpad - wpad / 2, ncnn::BORDER_CONSTANT, 114.f);
 
-    const float norm_vals[3] = {1 / 255.f, 1 / 255.f, 1 / 255.f};
+    const float norm_vals[3] = { 1 / 255.f, 1 / 255.f, 1 / 255.f };
     in_pad.substract_mean_normalize(0, norm_vals);
 
-    ncnn::Extractor ex = ((__yolov7)yolov7)->net.create_extractor();
+    ncnn::Extractor ex = yolov5->net.create_extractor();
 
-    ex.input(yolov7->layerName[0].c_str(), in_pad);
+    ex.input(yolov5->layerName[0].c_str(), in_pad);
 
     std::vector<Object> proposals;
 
     // stride 8
     {
         ncnn::Mat out;
-        ex.extract(yolov7->layerName[1].c_str(), out);
+        ex.extract(yolov5->layerName[1].c_str(), out);
 
         ncnn::Mat anchors(6);
-        anchors[0] = 12.f;
-        anchors[1] = 16.f;
-        anchors[2] = 19.f;
-        anchors[3] = 36.f;
-        anchors[4] = 40.f;
-        anchors[5] = 28.f;
+        anchors[0] = 10.f;
+        anchors[1] = 13.f;
+        anchors[2] = 16.f;
+        anchors[3] = 30.f;
+        anchors[4] = 33.f;
+        anchors[5] = 23.f;
 
         std::vector<Object> objects8;
         generate_proposals(anchors, 8, in_pad, out, prob_threshold, objects8);
@@ -311,15 +387,15 @@ extern "C" int __declspec(dllexport) __stdcall yolov7_Deal(__yolov7 yolov7, cons
     {
         ncnn::Mat out;
 
-        ex.extract(yolov7->layerName[2].c_str(), out);
+        ex.extract(yolov5->layerName[2].c_str(), out);
 
         ncnn::Mat anchors(6);
-        anchors[0] = 36.f;
-        anchors[1] = 75.f;
-        anchors[2] = 76.f;
-        anchors[3] = 55.f;
-        anchors[4] = 72.f;
-        anchors[5] = 146.f;
+        anchors[0] = 30.f;
+        anchors[1] = 61.f;
+        anchors[2] = 62.f;
+        anchors[3] = 45.f;
+        anchors[4] = 59.f;
+        anchors[5] = 119.f;
 
         std::vector<Object> objects16;
         generate_proposals(anchors, 16, in_pad, out, prob_threshold, objects16);
@@ -331,15 +407,15 @@ extern "C" int __declspec(dllexport) __stdcall yolov7_Deal(__yolov7 yolov7, cons
     {
         ncnn::Mat out;
 
-        ex.extract(yolov7->layerName[3].c_str(), out);
+        ex.extract(yolov5->layerName[3].c_str(), out);
 
         ncnn::Mat anchors(6);
-        anchors[0] = 142.f;
-        anchors[1] = 110.f;
-        anchors[2] = 192.f;
-        anchors[3] = 243.f;
-        anchors[4] = 459.f;
-        anchors[5] = 401.f;
+        anchors[0] = 116.f;
+        anchors[1] = 90.f;
+        anchors[2] = 156.f;
+        anchors[3] = 198.f;
+        anchors[4] = 373.f;
+        anchors[5] = 326.f;
 
         std::vector<Object> objects32;
         generate_proposals(anchors, 32, in_pad, out, prob_threshold, objects32);
@@ -352,7 +428,7 @@ extern "C" int __declspec(dllexport) __stdcall yolov7_Deal(__yolov7 yolov7, cons
 
     int count = picked.size();
 
-    //ËøòÂéüÂùêÊ†á
+    //ªπ‘≠◊¯±Í
     std::vector<Object> objects;
 
     objects.resize(count);
@@ -387,15 +463,15 @@ extern "C" int __declspec(dllexport) __stdcall yolov7_Deal(__yolov7 yolov7, cons
     return objects.size();
 }
 
-extern "C" void __declspec(dllexport) __stdcall yolov7_DestructRet(Object *ResList)
+extern "C" void __declspec(dllexport) __stdcall yolov5_DestructRet(Object * ResList)
 {
     delete[] ResList;
 }
 
-extern "C" void __declspec(dllexport) __stdcall yolov7_Destroy(__yolov7 yolov7)
+extern "C" void __declspec(dllexport) __stdcall yolov5_Destroy(__yolov5 yolov5)
 {
-    yolov7->net.clear();
-    delete yolov7;
+    yolov5->net.clear();
+    delete yolov5;
 }
 
 #endif
