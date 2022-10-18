@@ -6,6 +6,9 @@
 交流Q群：904511841
 点击链接加入群聊【ZMPI Development Insider】：https://jq.qq.com/?_wv=1027&k=17AMp3X1
 
+# V1.2.1 Ocr Fixed
+最新版本修复了Ocr的内存泄露问题，但是忘了上传，请进群下载。
+
 # V1.2.1b更新日志
 ## 特别
 1. 改变项目为sln项目
