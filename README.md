@@ -1,10 +1,58 @@
 # ncnn4e
-关于NCNN常见模型便于C的封装
+关于NCNN常见模型便于C调用的封装，以及OpenCv常用功能的包装
 
-当前最新版本~1.2.1b~
+当前最新版本~1.3.0b~
 
 交流Q群：904511841
 点击链接加入群聊【ZMPI Development Insider】：https://jq.qq.com/?_wv=1027&k=17AMp3X1
+
+# V1.3.0b更新日志
+## 特别
+1. 彻底修复了Ocr存在的内存泄漏问题
+2. 改yolov7为pnnx版本
+3. 引入了较为完整的opencv 体积增加
+
+## 功能
+1. 百度飞桨Ocr
+2. Yolov7
+3. MoveNet(多对象肢体识别)
+4. 人脸检测
+5. 人脸特征提取与识别
+6. Yolov4
+7. pHash&Match
+8. Yolov5/Yolov5_6.0
+9. GPU多目标找图
+10. 边缘检测
+11. 分类器
+
+## 注意
+项目使用以下项目的二进制文件或是源码，由于各部分开源协议不一致，请谨慎使用
+
+1. https://github.com/nihui/ncnn
+2. https://github.com/FeiGeChuanShu/ncnn_paddleocr
+3. https://github.com/DayBreak-u/chineseocr_lite/tree/onnx/cpp_projects/OcrLiteNcnn
+4. https://github.com/frotms/PaddleOCR2Pytorch
+5. https://github.com/PaddlePaddle/PaddleOCR#PP-OCRv2
+6. https://github.com/PaddlePaddle/PaddleOCR/blob/release/2.5
+7. https://github.com/WongKinYiu/yolov7
+8. https://github.com/FeiGeChuanShu/ncnn_Android_MoveNet
+9. https://github.com/nihui/ncnn-android-nanodet
+10. Google MoveNet
+11. https://github.com/FeiGeChuanShu/ncnn_Android_blazeface
+12. https://github.com/WegenPan/faceRecognition-jna
+13. https://github.com/Tianxiaomo/pytorch-YOLOv4
+## 已知BUG
+1. yolov4开启vulkan可能有bug
+2. ~ UP没有往头文件写东西 ~
+3. 存在核心显卡的设备，GPU找图和边缘检测可能优先调用核心显卡
+4. Yolov7 无法正常使用
+
+## To Do
+1. 易语言采用wow64方法调用64bit的dll，以便支持更大的内存
+2. 修复现有bug
+3. FastestDet (纯cpu也能几毫秒一张图)
+
+================这是一条分割线==================
 
 # V1.2.1 Ocr Fixed
 最新版本修复了Ocr的内存泄露问题，但是忘了上传，请进群下载。
