@@ -3,8 +3,6 @@
 
 struct _ocr
 {
-    ncnn::UnlockedPoolAllocator g_blob_pool_allocator;
-    ncnn::PoolAllocator g_workspace_pool_allocator;
     int dstHeight = 32; // when use PP-OCRv3 it should be 48
 
     ncnn::Net dbNet;
@@ -310,6 +308,7 @@ inline TextLine getTextLine(__ocr ocr, const cv::Mat &src)
     int dstWidth = int((float)src.cols * scale);
 
     cv::Mat srcResize;
+
     cv::resize(src, srcResize, cv::Size(dstWidth, ocr->dstHeight));
     // if you use PP-OCRv3 you should change PIXEL_RGB to PIXEL_RGB2BGR
     ncnn::Mat input;
@@ -341,7 +340,7 @@ inline std::vector<TextLine> getTextLines(__ocr ocr, std::vector<cv::Mat> &partI
     std::vector<TextLine> textLines(size);
 
 //带LSTM的模型在外面开多线程加速效果会比在里面开多线程加速好
-//#pragma omp parallel for num_threads(4)
+#pragma omp parallel for num_threads(ncnn::get_big_cpu_count())
 
     for (int i = 0; i < size; ++i)
     {
@@ -382,6 +381,9 @@ inline cv::Mat getRotateCropImage(const cv::Mat &src, std::vector<cv::Point> box
                                 pow(points[0].y - points[1].y, 2)));
     int imgCropHeight = int(sqrt(pow(points[0].x - points[3].x, 2) +
                                  pow(points[0].y - points[3].y, 2)));
+
+    if (imgCropWidth == 0 || imgCropHeight == 0)
+        return src.clone();
 
     cv::Point2f ptsDst[4];
     ptsDst[0] = cv::Point2f(0., 0.);
@@ -456,15 +458,21 @@ extern "C" __ocr __declspec(dllexport) __stdcall ocr_InitPaddleOcr(const unsigne
     ncnn::Option opt;
     opt.lightmode = true;
     opt.num_threads = ncnn::get_big_cpu_count();
-    opt.blob_allocator = &ocr->g_blob_pool_allocator;
-    opt.workspace_allocator = &ocr->g_workspace_pool_allocator;
     opt.use_packing_layout = true;
     opt.use_local_pool_allocator = false;
 
     opt.use_vulkan_compute = use_vulkan;
 
+    ncnn::Option opt2;
+    opt2.lightmode = true;
+    opt2.num_threads =1;
+    opt2.use_packing_layout = true;
+    opt2.use_local_pool_allocator = false;
+
+    opt2.use_vulkan_compute = use_vulkan;
+
     ocr->dbNet.opt = opt;
-    ocr->crnnNet.opt = opt;
+    ocr->crnnNet.opt = opt2;
 
     // init param
     {
@@ -554,6 +562,13 @@ extern "C" int __declspec(dllexport) __stdcall ocr_Deal(__ocr ocr, unsigned char
         for (int i = 0; i < textLines.size(); i++)
             objects[i].text = textLines[i].text;
     }
+    std::vector<TextBox> objects_copy = objects;
+
+    objects.clear();
+    for (auto x : objects_copy)
+        if (x.text != "")
+            objects.emplace_back(x);
+
     int count = objects.size();
     if (count == 0)
         return 0;

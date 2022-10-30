@@ -2,20 +2,20 @@
 
 #include "pch.h"
 //Opencv
-#pragma comment(lib,"opencv_core460.lib")
-#pragma comment(lib,"opencv_imgcodecs460.lib")
-#pragma comment(lib,"opencv_imgproc460.lib")
-#pragma comment(lib,"opencv_photo460.lib")
-#pragma comment(lib,"opencv_features2d460.lib")
-#pragma comment(lib,"opencv_highgui460.lib")
-#pragma comment(lib,"opencv_video460.lib")
-#pragma comment(lib,"zlib.lib")
-#pragma comment(lib,"IlmImf.lib")
-#pragma comment(lib,"libpng.lib")
-#pragma comment(lib,"libwebp.lib")
-#pragma comment(lib,"libtiff.lib")
+#pragma comment(lib,"opencv_world460.lib")
+#pragma comment(lib,"ippicvmt.lib")
+#pragma comment(lib,"ippiw.lib")
 #pragma comment(lib,"libopenjp2.lib")
+#pragma comment(lib,"ittnotify.lib")
 #pragma comment(lib,"libjpeg-turbo.lib")
+#pragma comment(lib,"libpng.lib")
+#pragma comment(lib,"libtiff.lib")
+#pragma comment(lib,"libwebp.lib")
+#pragma comment(lib,"zlib.lib")
+
+#pragma comment(lib,"ade.lib")
+#pragma comment(lib,"IlmImf.lib")
+
 
 //NCNN
 #pragma comment(lib,"ncnn.lib")

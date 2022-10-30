@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -100,13 +100,13 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <IncludePath>$(SolutionDir)ncnn-vulkan-static\windows-x86\include\ncnn;$(SolutionDir)ncnn-vulkan-static\windows-x86\include;$(SolutionDir)opencv-static\windows-x86\include;$(VULKAN_SDK)\Include;$(IncludePath)</IncludePath>
-    <LibraryPath>$(SolutionDir)ncnn-vulkan-static\windows-x86\lib;$(SolutionDir)opencv-static\windows-x86\x86\vc15\staticlib;$(VULKAN_SDK)\Lib32;$(LibraryPath)</LibraryPath>
+    <LibraryPath>$(SolutionDir)ncnn-vulkan-static\windows-x86\lib;$(SolutionDir)opencv-static\windows-x86\x86\vc17\staticlib;$(VULKAN_SDK)\Lib32;$(LibraryPath)</LibraryPath>
     <ReferencePath>$(ReferencePath)</ReferencePath>
     <EnableClangTidyCodeAnalysis>true</EnableClangTidyCodeAnalysis>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Rel_Debug|Win32'">
     <IncludePath>$(SolutionDir)ncnn-vulkan-static\windows-x86\include\ncnn;$(SolutionDir)ncnn-vulkan-static\windows-x86\include;$(SolutionDir)opencv-static\windows-x86\include;$(VULKAN_SDK)\Include;$(IncludePath)</IncludePath>
-    <LibraryPath>$(SolutionDir)ncnn-vulkan-static\windows-x86\lib;$(SolutionDir)opencv-static\windows-x86\x86\vc15\staticlib;$(VULKAN_SDK)\Lib32;$(LibraryPath)</LibraryPath>
+    <LibraryPath>$(SolutionDir)ncnn-vulkan-static\windows-x86\lib;$(SolutionDir)opencv-static\windows-x86\x86\vc17\staticlib;$(VULKAN_SDK)\Lib32;$(LibraryPath)</LibraryPath>
     <ReferencePath>$(ReferencePath)</ReferencePath>
     <EnableClangTidyCodeAnalysis>true</EnableClangTidyCodeAnalysis>
   </PropertyGroup>
@@ -139,6 +139,7 @@
       <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
       <OpenMPSupport>true</OpenMPSupport>
       <Optimization>MaxSpeed</Optimization>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -162,6 +163,7 @@
       <EnableEnhancedInstructionSet>NoExtensions</EnableEnhancedInstructionSet>
       <OpenMPSupport>true</OpenMPSupport>
       <Optimization>Disabled</Optimization>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -252,6 +254,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Rel_Debug|x64'">Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="pose.cpp" />
+    <ClCompile Include="sort.cpp" />
     <ClCompile Include="yolov4.cpp" />
     <ClCompile Include="yolov5.cpp" />
     <ClCompile Include="yolov7.cpp" />

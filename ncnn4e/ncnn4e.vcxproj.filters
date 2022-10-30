@@ -80,5 +80,8 @@
     <ClCompile Include="yolov5.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="sort.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>
